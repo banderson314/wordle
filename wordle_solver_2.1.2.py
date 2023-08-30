@@ -1,10 +1,15 @@
 # Made by Brandon Anderson
 
 import random
+import os
 
 # Load the list of five-letter words
-with open("D:/Scripts/Wordle/dictionary/five_letter_words_scholtes.txt", "r") as file:
+script_directory = os.path.dirname(os.path.abspath(__file__))
+word_list_file = os.path.join(script_directory, "dictionary/five_letter_words_scholtes.txt")
+with open(word_list_file, "r") as file:
     word_list = [line.strip() for line in file]
+
+original_word_list = set(word_list)
 
 # Function to compare two words and provide feedback
 def provide_feedback():
@@ -139,12 +144,50 @@ def optimal_word_selection(proposed_guess_word, remaining_words):
 
 
 
-def provide_multiple_options(remaining_words):
+def provide_best_words_following_feedback(remaining_words):
     options_given = 10      # Will provide the 10 best options, unless there are less than 10 total remaining
     if len(remaining_words) < options_given:
         options_given = len(remaining_words)
     best_words = []
+
+    if method == "1":   # Only need the feedback if user selected 1. provide_best_words_regardless_of_feedback does sometimes call this function and this isn't needed
+        total_words_to_process = len(remaining_words)
+        count = 0
+        print(f"Processed {count}/{total_words_to_process} words", end="\r")
+
     for proposed_guess_word in remaining_words:
+
+        average_reduction = optimal_word_selection(proposed_guess_word, remaining_words)
+
+        if len(best_words) < options_given:
+            best_words.append((proposed_guess_word, average_reduction))
+            best_words.sort(key=lambda x: x[1], reverse=True)
+        elif average_reduction > best_words[-1][1]:
+            best_words.pop()
+            best_words.append((proposed_guess_word, average_reduction))
+            best_words.sort(key=lambda x: x[1], reverse=True)
+
+        if method == "1":
+            count += 1
+            percent_done = int(100*count/total_words_to_process)
+            progress_message = f"Processed {count}/{total_words_to_process} words. {percent_done}%"
+            print(progress_message, end="\r")
+    
+    if method == "1":
+        print("\n")
+
+    return best_words
+
+def provide_best_words_regardless_of_feedback(remaining_words):
+    options_given = 10      # Will provide the 10 best options, unless there are less than 10 total remaining
+    best_words = []
+    
+
+    total_words_to_process = len(original_word_list)
+    count = 0
+    print(f"Processed {count}/{total_words_to_process} words", end="\r")
+
+    for proposed_guess_word in original_word_list:   # By using original_word_list instead of remaining_words, we consider all words as potential guesses
         
         average_reduction = optimal_word_selection(proposed_guess_word, remaining_words)
 
@@ -156,14 +199,37 @@ def provide_multiple_options(remaining_words):
             best_words.append((proposed_guess_word, average_reduction))
             best_words.sort(key=lambda x: x[1], reverse=True)
 
+        count += 1
+        percent_done = int(100*count/total_words_to_process)
+        progress_message = f"Processed {count}/{total_words_to_process} words. {percent_done}%"
+        print(progress_message, end="\r")
+    
+    print("\n")
+
+    # If all of the reduction scores are the same, that usually means there are only a couple answers left, so we will just report the words that follow the feedback given
+    reduction_scores = [guess_and_score[1] for guess_and_score in best_words]
+    if all(score == reduction_scores[0] for score in reduction_scores):
+        best_words = provide_best_words_following_feedback(remaining_words)
+
+
     return best_words
 
 
-total_possible_words = len(word_list)
+# Start of the wordle solver
+print("\nWelcome to Wordle Solver\n")
+total_possible_words = len(original_word_list)
 print(f"Total words in dictionary: {total_possible_words}")
 
-# Simulated Wordle game
-remaining_words = set(word_list)
+print("Two methods are available.")
+print("Enter '1' if you want the guesses to always follow the feedback given.")
+print("Enter '2' if you want the guesses to also include words that have been rejected.\n")
+method = input("Method: ")
+while method != "1" and method != "2":
+    print("Invalid input. Please enter 1 or 2.")
+    method = input("Method: ")
+
+
+remaining_words = original_word_list
 attempts = 0
 
 
@@ -171,10 +237,25 @@ while attempts < 6:  # The code will stop after 6 tries
     if attempts == 0:
         guess = input("First guess: ")
         guess = guess.upper()
+        if guess == "OPTIONS":
+            original_best_words_file = os.path.join(script_directory, "best_words.txt")
+            with open(original_best_words_file, "r") as file:
+                original_best_options = [line.strip() for line in file]
+            for i, line in enumerate(original_best_options):
+                if i > 2 and i < 13:
+                    print(line)
+            guess = input("First guess: ")
+            guess = guess.upper()
     elif len(remaining_words) == 1:
         guess = remaining_words.pop()
+        print(f"The secret word is '{guess}'")
+        print(f"Total attempts: {attempts + 1}")
+        exit()
     else:
-        best_words = provide_multiple_options(remaining_words)
+        if method == "1":
+            best_words = provide_best_words_following_feedback(remaining_words)
+        elif method == "2":
+            best_words = provide_best_words_regardless_of_feedback(remaining_words)
         guess = best_words[0][0]
 
     print(f"Attempt {attempts + 1}: Guessing '{guess}'")
