@@ -4,6 +4,11 @@ import random
 import os
 import time
 import math
+import cv2
+import numpy as np
+import pyautogui
+import pygetwindow as gw
+import platform
 
 
 # Load the list of five-letter words
@@ -279,15 +284,6 @@ def provide_best_words_regardless_of_feedback(remaining_words):
 
 
 def locate_wordle_on_screen():
-    import cv2
-    import numpy as np
-    import pyautogui
-
-    def display_image(image, wait_time=10_000):
-        cv2.imshow(f"Image: {image}", image)
-        cv2.waitKey(wait_time)
-        cv2.destroyAllWindows()
-
     # Capture the screen and convert to a NumPy array
     screenshot = pyautogui.screenshot()
     screen_img = np.array(screenshot)
@@ -322,7 +318,7 @@ def locate_wordle_on_screen():
     for contour in filtered_contours:
         x, y, w, h = cv2.boundingRect(contour)
         area = w * h
-        if area > 2000:
+        if area > 1500:
             contours_to_keep.append(contour)
     filtered_contours = contours_to_keep
 
@@ -368,7 +364,9 @@ def locate_wordle_on_screen():
     if len(grid_coordinates) != 30:
         print("Error in locating the wordle grid. Should only detect 30 boxes on screen but that is not the case.")
         print(f"Number of boxes: {len(grid_coordinates)}")
-        display_image(image_with_contours)
+        cv2.imshow(f"Number of boxes seen: {len(grid_coordinates)}", image_with_contours)
+        cv2.waitKey(10_000)
+        cv2.destroyAllWindows()
         exit()
 
     # Creating y coordinates for each row
@@ -387,6 +385,78 @@ def locate_wordle_on_screen():
             column_coordinates.append(x1+5)
 
     return row_coordinates, column_coordinates
+
+
+
+
+
+
+
+
+
+
+
+
+def get_feedback_automatically(attempt_number):
+    # Get the RGB color at each coordinate in the first row
+    colors = []
+    current_row = row_coordinates[attempt_number]
+    for column in column_coordinates:
+        pixel_color = pyautogui.pixel(column, current_row)
+        colors.append(pixel_color)
+
+    def rgb_to_color_name(rgb):
+        # First looking to see if it is black/white/grey
+        range_of_rgb = max(rgb) - min(rgb)
+        if range_of_rgb < 11:
+            if min(rgb) > 180:
+                return "white"
+            else:
+                return "black"
+
+        standard_colors = {
+            "yellow": (255, 255, 0),
+            "green": (0, 128, 0),
+        }
+
+        # Find the closest matching  color
+        min_distance = float('inf')
+        closest_color = None
+
+        for color, standard_rgb in standard_colors.items():
+            r1, g1, b1 = rgb
+            r2, g2, b2 = standard_rgb
+            distance = ((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2) ** 0.5
+
+            if distance < min_distance:
+                min_distance = distance
+                closest_color = color
+
+        return closest_color
+
+    colors = [rgb_to_color_name(rgb) for rgb in colors]
+    color_to_char = {
+        "yellow": "Y",
+        "black": "R",
+        "green": "G"
+    }
+    # Map the colors to characters and join them into a string
+    feedback = "".join(color_to_char.get(color, "") for color in colors)
+    return feedback
+
+def input_word_into_wordle(guess):
+    x, y = pyautogui.position()
+    pyautogui.click(column_coordinates[0], row_coordinates[0])
+    pyautogui.moveTo(x, y)
+    pyautogui.typewrite(guess)
+    pyautogui.press('enter')
+    time.sleep(1.5)
+    if platform.system() == 'Windows':
+        pyautogui.hotkey('alt', 'tab')
+    elif platform.system() == 'Darwin':  # macOS
+        pyautogui.hotkey('command', 'tab')
+    else:
+        pass
 
 
 
@@ -412,9 +482,11 @@ while True:
 
     elif method == "AUTO":
         row_coordinates, column_coordinates = locate_wordle_on_screen()
+        mode = "auto"
+        print("Wordle grid is located. Please do not cover it up or move it while playing.")
 
-        print(f"Row coordinates: {row_coordinates}")
-        print(f"Column coordinates: {column_coordinates}")
+        #print(f"Row coordinates: {row_coordinates}")
+        #print(f"Column coordinates: {column_coordinates}")
 
     elif method in {"1", "2"}:
         break
@@ -475,12 +547,17 @@ while attempts < 6:  # The code will stop after 6 tries
 
     if guess == "EXIT":
         exit()
+    if mode == "auto":
+        input_word_into_wordle(guess)
 
     # The user then tells the computer what the feedback is from wordle, or they ask the computer for other word suggestions
     if mode == "play":
         feedback = provide_feedback()
     elif mode == "test":
         feedback = simulated_provide_feedback(secret_word, guess)
+        print(f"Feedback: {feedback}")
+    elif mode == "auto":
+        feedback = get_feedback_automatically(attempts)
         print(f"Feedback: {feedback}")
 
 
