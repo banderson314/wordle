@@ -57,7 +57,9 @@ def simulated_provide_feedback(secret_word, guess):
 def refine_possible_words(possible_words, feedback, guess):
     refined_words = set()
 
-    '''# If the guess contains multiple of the same letter(s), this logic is run
+    #############
+    '''
+    # Checks to see if there are repeated letters in the guess
     def find_repeated_letters(guess):
         letters_in_word = {}
         repeated_letters = {}
@@ -102,7 +104,9 @@ def refine_possible_words(possible_words, feedback, guess):
             if r_count > 0:    # Changing the feedback to something the the next code can handle (changing R's to Y's if that letter actually exists somewhere)
                 for i, fb in enumerate(feedback):
                     if i in positions_of_letter and fb == "R":
-                        feedback = feedback[:i] + "Y" + feedback[i + 1:]'''
+                        feedback = feedback[:i] + "Y" + feedback[i + 1:]
+    ########
+    '''
 
 
     # Eliminating potential words quickly based off of the presence (not position) of the letters
@@ -121,7 +125,7 @@ def refine_possible_words(possible_words, feedback, guess):
     possible_words = new_possible_words
 
 
-    # Now looping through all possible words and matching the letter feedback
+    # Now looping through all possible words and matching the letter feedback based on position
     for word in possible_words:
         valid_word = True
 
