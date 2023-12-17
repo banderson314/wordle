@@ -9,6 +9,8 @@ import numpy as np
 import pyautogui
 import pygetwindow as gw
 import platform
+import re
+import ast
 
 
 # Load the list of five-letter words
@@ -16,8 +18,22 @@ script_directory = os.path.dirname(os.path.abspath(__file__))
 word_list_file = os.path.join(script_directory, "dictionary/five_letter_words_scholtes.txt")
 with open(word_list_file, "r") as file:
     word_list = [line.strip() for line in file]
-
 original_word_list = set(word_list)
+
+
+# Reading the presolved document, or creating it if it doesn't exist
+presolved_document = os.path.join(script_directory, "dictionary/presolved_words.txt")
+if not os.path.exists(presolved_document):
+    with open(presolved_document, "w"):
+        pass
+with open(presolved_document, "r") as file:
+    presolved_words_string = [line.strip() for line in file]
+# Converting the document into something python can read as lists    
+presolved_words = []
+for line in presolved_words_string:
+    presolved_words.append(ast.literal_eval(line))
+
+
 
 # Function to compare two words and provide feedback
 def provide_feedback():
@@ -194,14 +210,17 @@ def provide_best_words_regardless_of_feedback(remaining_words):
     if len(remaining_words) < options_given:
         answer_options_given = len(remaining_words)
 
-    total_words_to_process = len(original_word_list)    # Initiating progress message
-    count = 0
-    print(f"Processed {count}/{total_words_to_process} words", end="\r")
-    previous_percent_done = 0
-    loop_start_time = time.time()
-    prev_progress_message_length = 0
+    # Initiating progress message
+    if mode != "presolve":
+        total_words_to_process = len(original_word_list)    
+        count = 0
+        print(f"Processed {count}/{total_words_to_process} words", end="\r")
+        previous_percent_done = 0
+        loop_start_time = time.time()
+        prev_progress_message_length = 0
 
-    for proposed_guess_word in original_word_list:   # By using original_word_list instead of remaining_words, we consider all words as potential guesses
+    # By using original_word_list instead of remaining_words, we consider all words as potential guesses
+    for proposed_guess_word in original_word_list:   
 
         average_reduction = optimal_word_selection(proposed_guess_word, remaining_words)
 
@@ -232,53 +251,55 @@ def provide_best_words_regardless_of_feedback(remaining_words):
 
 
         # Updating the progress message
-        count += 1
-        percent_done = int(100*count/total_words_to_process)
+        if mode != "presolve":
+            count += 1
+            percent_done = int(100*count/total_words_to_process)
 
-        if percent_done != previous_percent_done:
-            previous_percent_done = percent_done
-            loop_end_time = time.time()
-            loop_duration_time = loop_end_time - loop_start_time
-            remaining_percentage = 100 - percent_done
-            time_remaining = int(loop_duration_time * remaining_percentage)
+            if percent_done != previous_percent_done:
+                previous_percent_done = percent_done
+                loop_end_time = time.time()
+                loop_duration_time = loop_end_time - loop_start_time
+                remaining_percentage = 100 - percent_done
+                time_remaining = int(loop_duration_time * remaining_percentage)
+
+                try:
+                    if time_remaining > previous_time_remaining:
+                        time_remaining = previous_time_remaining
+                    previous_time_remaining = time_remaining
+                except NameError:
+                    previous_time_remaining = time_remaining
+
+                loop_start_time = time.time()
+
+            #if count > 2:
+            #    blank_message = " " * len(progress_message)
+            #    print(blank_message, end="\r")
 
             try:
-                if time_remaining > previous_time_remaining:
-                    time_remaining = previous_time_remaining
-                previous_time_remaining = time_remaining
+                if time_remaining < 61:
+                    progress_message = f"Processed {count}/{total_words_to_process} words. Time remaining: {time_remaining} s. {percent_done}% done."
+                else:
+                    minutes_remaining = math.floor(time_remaining / 60)
+                    seconds_remainder = time_remaining - (minutes_remaining * 60)
+                    progress_message = f"Processed {count}/{total_words_to_process} words. Time remaining: {minutes_remaining} min {seconds_remainder} s. {percent_done}% done."
+
             except NameError:
-                previous_time_remaining = time_remaining
+                progress_message = f"Processed {count}/{total_words_to_process} words. {percent_done}% done."
 
-            loop_start_time = time.time()
+            progress_message_length = len(progress_message)
+            if prev_progress_message_length > progress_message_length:
+                blank_message = " " * prev_progress_message_length
+                print(blank_message, end="\r")
 
-        #if count > 2:
-        #    blank_message = " " * len(progress_message)
-        #    print(blank_message, end="\r")
-
-        try:
-            if time_remaining < 61:
-                progress_message = f"Processed {count}/{total_words_to_process} words. Time remaining: {time_remaining} s. {percent_done}% done."
-            else:
-                minutes_remaining = math.floor(time_remaining / 60)
-                seconds_remainder = time_remaining - (minutes_remaining * 60)
-                progress_message = f"Processed {count}/{total_words_to_process} words. Time remaining: {minutes_remaining} min {seconds_remainder} s. {percent_done}% done."
-
-        except NameError:
-            progress_message = f"Processed {count}/{total_words_to_process} words. {percent_done}% done."
-
-        progress_message_length = len(progress_message)
-        if prev_progress_message_length > progress_message_length:
-            blank_message = " " * prev_progress_message_length
-            print(blank_message, end="\r")
-
-        print(progress_message, end="\r")
-        prev_progress_message_length = progress_message_length
+            print(progress_message, end="\r")
+            prev_progress_message_length = progress_message_length
 
     # Removing any words from best_potential_answers if they already appear in best_words
     best_potential_answers = [sublist for sublist in best_potential_answers if not any(sublist[0] == word[0] for word in best_words)]
 
-    blank_message = " " * len(progress_message)
-    print(blank_message, end="\r")
+    if mode != "presolve":
+        blank_message = " " * len(progress_message)
+        print(blank_message, end="\r")
 
     return best_words, best_potential_answers
 
@@ -474,11 +495,25 @@ print("Enter '2' if you want the guesses to also include words that have been re
 mode = "play"
 while True:
     method = input("Method: ").strip().upper()
+    user_given_answer = re.match(r"TEST (\w{5})", method)
+    presolve_word = re.match(r"PRESOLVE (\w{5})", method)
 
-    if method == "TEST":   # Enters test mode where the script picks a word and automatically provides feedback
+    # Enters test mode where the script picks a word and automatically provides feedback
+    if method == "TEST":
         mode = "test"
         secret_word = random.choice(list(original_word_list)).upper()
         print(f"Secret word: {secret_word}")
+    
+    # If the user wants to run test mode using a specific word as the answer
+    elif user_given_answer:
+        mode = "test"
+        secret_word = user_given_answer.group(1)
+        print(f"Secret word: {secret_word}")
+
+    elif presolve_word:
+        word_to_presolve = presolve_word.group(1)
+        mode = "presolve"
+        break
 
     elif method == "AUTO":
         row_coordinates, column_coordinates = locate_wordle_on_screen()
@@ -493,14 +528,70 @@ while True:
 
 
 
+
+# [word, {feedback: [best_words, best_potential_words]}]
+# If the user specified presolve mode
+if mode == "presolve":
+    # Checking if the word has already been presolved
+    for word in presolved_words:
+        if word[0] == word_to_presolve:
+            print(f"{word_to_presolve} has already been presolved.")
+            print(f"If this is in error, go to the presolved document and delete the entry for {word_to_presolve}")
+            exit()
+    
+    print(f"Presolving for: {word_to_presolve}")
+    
+    potential_feedbacks = set()
+    for word in original_word_list:
+        feedback = simulated_provide_feedback(word, word_to_presolve)
+        if feedback not in potential_feedbacks:
+            potential_feedbacks.add(feedback)
+    
+    feedback_and_answers_dict = {}
+    for i, feedback in enumerate(potential_feedbacks):
+        remaining_words = refine_possible_words(original_word_list, feedback, word_to_presolve)
+        print(f"\n{feedback}: {len(remaining_words)}")
+
+        best_words, best_potential_answers = provide_best_words_regardless_of_feedback(remaining_words)    
+        if len(remaining_words) <= 2:
+            best_words = []
+
+
+        feedback_and_answers_dict[feedback] = [best_words, best_potential_answers]
+
+        print(f"Best words: {best_words}")
+        print(f"Best potential answers: {best_potential_answers}")
+        print(f"Remaining feedbacks to simulate: {len(potential_feedbacks)-i-1}")
+
+
+    # Saving the answers found in presolved_words.txt
+    presolve_document_entry = [word_to_presolve, feedback_and_answers_dict]
+    presolve_document_entry = str(presolve_document_entry) + "\n"
+    with open(presolved_document, "a") as file:
+        file.write(presolve_document_entry)
+    
+    exit()
+
+
+
+
+# If not in presolve mode, running the code normally:
 remaining_words = original_word_list
 attempts = 0
-
-
 while attempts < 6:  # The code will stop after 6 tries
     if attempts == 0:   # The first word
         guess = input("\nGuess #1: ")
         guess = guess.upper()
+
+        # Checking to see if the word has been presolved
+        presolved = False
+        for word in presolved_words:
+            if word[0] == guess:
+                presolved = True
+                presolved_feedback = word[1]
+                continue
+
+        # Provide the user with a list of predetermined "best" options, if requested
         if guess == "OPTIONS":
             original_best_words_file = os.path.join(script_directory, "best_words.txt")
             with open(original_best_words_file, "r") as file:
@@ -517,8 +608,12 @@ while attempts < 6:  # The code will stop after 6 tries
         print(f"Total attempts: {attempts + 1}")
         exit()
 
+
     else:
-        if method == "1":
+        if attempts == 1 and presolved == True:
+            best_words = presolved_feedback[feedback][0]
+            best_potential_answers = presolved_feedback[feedback][1]
+        elif method == "1":
             best_words = provide_best_words_following_feedback(remaining_words)
         elif method == "2":
             best_words, best_potential_answers = provide_best_words_regardless_of_feedback(remaining_words)
