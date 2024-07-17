@@ -493,8 +493,10 @@ def input_word_into_wordle(guess):
 
 
 
+##############################################
+######### Start of the wordle solver #########
+##############################################
 
-# Start of the wordle solver
 print("\nWelcome to Wordle Solver\n")
 total_possible_words = len(original_word_list)
 print(f"Total words in dictionary: {total_possible_words}")
@@ -617,6 +619,8 @@ while attempts < 6:  # The code will stop after 6 tries
         guess = remaining_words.pop()
         print(f"\nThe secret word is '{guess}'")
         print(f"Total attempts: {attempts + 1}")
+        if mode == "auto":
+            input_word_into_wordle(guess)
         exit()
 
 
